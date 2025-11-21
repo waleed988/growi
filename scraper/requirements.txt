@@ -1,0 +1,33 @@
+# Core HTTP and Scraping
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==5.3.0
+html5lib==1.1
+brotli==1.1.0
+
+# User-Agent Rotation
+fake-useragent==1.4.0
+
+# Retry Logic and Rate Limiting
+tenacity==8.2.3
+
+# Configuration Management
+python-dotenv==1.0.0
+
+# JSON Handling (built-in, but for reference)
+# json - built-in
+
+# Date/Time Utilities
+python-dateutil==2.8.2
+
+# Logging Enhancements
+coloredlogs==15.0.1
+
+# URL Parsing
+urllib3==2.1.0
+
+# For better HTTP connection pooling
+requests-toolbelt==1.0.0
+
+# Environment validation
+pydantic==2.10.6
