@@ -33,16 +33,26 @@ class ProfileScraper:
     def _extract_shared_data(self, html: str) -> Optional[Dict[str, Any]]:
         """
         Extract shared data from HTML.
-        Instagram embeds JSON data in window._sharedData or similar variables.
-
-        Args:
-            html: HTML content
-
-        Returns:
-            Extracted JSON data or None
+        Instagram embeds JSON data in various script tags.
         """
         try:
-            # Try multiple patterns as Instagram changes the variable name
+            # Method 1: Try new data-sjs script tags (2024+ Instagram structure)
+            soup = BeautifulSoup(html, 'lxml')
+            
+            # Look for script tags with data-sjs attribute
+            sjs_scripts = soup.find_all('script', attrs={'data-sjs': True})
+            for script in sjs_scripts:
+                if script.string:
+                    try:
+                        data = json.loads(script.string)
+                        # Check if this contains user profile data
+                        if self._contains_profile_data(data):
+                            logger.debug("Found profile data in data-sjs script")
+                            return data
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Method 2: Old patterns with regex
             patterns = [
                 r'window\._sharedData\s*=\s*({.+?});</script>',
                 r'window\.__additionalDataLoaded\([^,]+,\s*({.+?})\);</script>',
@@ -54,18 +64,26 @@ class ProfileScraper:
                 if match:
                     json_str = match.group(1)
                     data = json.loads(json_str)
-                    logger.debug(f"Successfully extracted shared data using pattern: {pattern[:50]}")
+                    logger.debug(f"Successfully extracted shared data using pattern")
                     return data
 
             logger.warning("Could not find shared data in HTML with any known pattern")
+            
+            # Method 3: Try to use the API endpoint instead
+            logger.info("Attempting to use API endpoint fallback")
             return None
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse shared data JSON: {e}")
-            return None
         except Exception as e:
             logger.error(f"Error extracting shared data: {e}")
             return None
+
+    def _contains_profile_data(self, data: Dict[str, Any]) -> bool:
+        """Check if data contains profile information"""
+        data_str = json.dumps(data)
+        # Look for profile-related keys
+        profile_indicators = ['username', 'follower', 'biography', 'edge_followed_by']
+        return any(indicator in data_str for indicator in profile_indicators)
+
 
     def _extract_graphql_data(self, html: str) -> Optional[Dict[str, Any]]:
         """
