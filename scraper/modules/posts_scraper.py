@@ -216,7 +216,7 @@ class PostsScraper:
         try:
             # GraphQL query parameters
             # Note: query_hash may need to be updated if Instagram changes it
-            query_hash = "69cba40317214236af40e7efa697781d"  # This is for user posts
+            query_hash = self.config.QUERY_HASH_USER_POSTS
 
             variables = {
                 'id': user_id,
@@ -242,6 +242,8 @@ class PostsScraper:
             user_data = data.get('data', {}).get('user')
             if not user_data:
                 logger.error("No user data in GraphQL response")
+                logger.debug(f"GraphQL response structure: {list(data.keys())}")
+                logger.debug(f"Full response: {str(data)[:500]}")
                 return [], None
 
             timeline_media = user_data.get('edge_owner_to_timeline_media', {})
@@ -277,83 +279,104 @@ class PostsScraper:
     def scrape_posts(
         self,
         username: str,
-        profile_html: Optional[str] = None,
-        user_id: Optional[str] = None,
+        user_id: str,
+        profile_user_data: Optional[Dict[str, Any]] = None,
         max_posts: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Scrape all posts from a profile with pagination.
+        Scrape posts from a profile. Extracts initial posts from profile data,
+        then uses GraphQL API for pagination (requires auth for public accounts).
 
         Args:
             username: Instagram username
-            profile_html: Pre-fetched profile HTML (optional)
-            user_id: User ID if already known (optional)
+            user_id: User ID from profile data (required)
+            profile_user_data: Full user data from profile API (optional)
             max_posts: Maximum number of posts to scrape (None = all)
 
         Returns:
             List of post dicts
         """
-        logger.info(f"Starting posts scrape for @{username}")
+        logger.info(f"Starting posts scrape for @{username} (user_id={user_id})")
 
         all_posts = []
 
         try:
-            # Fetch profile page if not provided
-            if not profile_html:
-                profile_url = f"{self.config.BASE_URL}/{username}/"
-                response = self.client.get(profile_url)
-
-                if response.status_code != 200:
-                    logger.error(f"Failed to fetch profile: HTTP {response.status_code}")
-                    return []
-
-                profile_html = response.text
-
-            # Extract initial posts
-            posts, end_cursor, extracted_user_id = self._extract_initial_posts(profile_html)
-            all_posts.extend(posts)
-
-            # Use extracted user_id if not provided
             if not user_id:
-                user_id = extracted_user_id
-
-            if not user_id:
-                logger.error("Could not determine user ID, cannot paginate")
-                return all_posts
-
-            logger.info(f"Initial batch: {len(posts)} posts, user_id={user_id}")
+                logger.error("user_id is required for scraping posts")
+                return []
 
             # Determine max posts to scrape
             max_to_scrape = max_posts or self.config.MAX_POSTS_TO_SCRAPE
             if max_to_scrape == 0:
                 max_to_scrape = float('inf')  # Unlimited
 
-            # Paginate through remaining posts
-            page_num = 1
-            while end_cursor and len(all_posts) < max_to_scrape:
-                logger.info(f"Fetching page {page_num}, cursor={end_cursor[:20]}...")
+            # Extract initial posts from profile API response if available
+            end_cursor = None
+            if profile_user_data and 'edge_owner_to_timeline_media' in profile_user_data:
+                timeline_media = profile_user_data['edge_owner_to_timeline_media']
+                edges = timeline_media.get('edges', [])
 
-                # Fetch next page
-                posts, end_cursor = self._fetch_paginated_posts(
-                    user_id=user_id,
-                    end_cursor=end_cursor,
-                    posts_per_page=self.config.POSTS_PER_PAGE
-                )
+                logger.info(f"Extracting {len(edges)} posts from profile API response")
+                for edge in edges:
+                    node = edge.get('node', {})
+                    post = self._parse_post_node(node)
+                    if post:
+                        all_posts.append(post)
 
-                if not posts:
-                    logger.warning("No posts returned, stopping pagination")
-                    break
+                # Get pagination cursor
+                page_info = timeline_media.get('page_info', {})
+                has_next_page = page_info.get('has_next_page', False)
+                if has_next_page:
+                    end_cursor = page_info.get('end_cursor')
+                    logger.info(f"Profile API indicates more posts available (has_next_page={has_next_page})")
+                else:
+                    logger.info(f"All posts retrieved from profile API ({len(all_posts)} total)")
+                    return all_posts[:max_to_scrape] if max_to_scrape < float('inf') else all_posts
 
-                all_posts.extend(posts)
-                page_num += 1
+            # Check if we already have enough posts
+            if len(all_posts) >= max_to_scrape:
+                logger.info(f"Reached max posts limit from profile API: {max_to_scrape}")
+                return all_posts[:max_to_scrape]
 
-                logger.info(f"Total posts scraped: {len(all_posts)}")
+            # Try to paginate using GraphQL (may require authentication)
+            if end_cursor:
+                logger.info(f"Attempting to fetch additional posts via GraphQL (may require authentication)...")
+                page_num = 1
 
-                # Stop if reached max
-                if len(all_posts) >= max_to_scrape:
-                    logger.info(f"Reached max posts limit: {max_to_scrape}")
-                    all_posts = all_posts[:max_to_scrape]
-                    break
+                try:
+                    while len(all_posts) < max_to_scrape and end_cursor:
+                        logger.info(f"Fetching page {page_num}, cursor={end_cursor[:20]}...")
+
+                        # Fetch posts page
+                        posts, end_cursor = self._fetch_paginated_posts(
+                            user_id=user_id,
+                            end_cursor=end_cursor,
+                            posts_per_page=self.config.POSTS_PER_PAGE
+                        )
+
+                        if not posts:
+                            logger.info("No more posts available via GraphQL")
+                            break
+
+                        all_posts.extend(posts)
+                        page_num += 1
+
+                        logger.info(f"Total posts scraped: {len(all_posts)}")
+
+                        # Stop if no more pages
+                        if not end_cursor:
+                            logger.info("Reached end of posts (no next page)")
+                            break
+
+                        # Stop if reached max
+                        if len(all_posts) >= max_to_scrape:
+                            logger.info(f"Reached max posts limit: {max_to_scrape}")
+                            all_posts = all_posts[:max_to_scrape]
+                            break
+
+                except Exception as e:
+                    logger.warning(f"GraphQL pagination failed (this is expected without authentication): {e}")
+                    logger.info(f"Returning {len(all_posts)} posts from profile API only")
 
             logger.info(f"Successfully scraped {len(all_posts)} posts for @{username}")
             return all_posts

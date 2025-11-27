@@ -1,22 +1,18 @@
 # Instagram Profile & Posts Scraper
 
-A production-grade Instagram scraper that extracts public profile data and posts using HTTP requests and JSON/HTML parsing. Built with Python, featuring retry logic, rate limiting, and full pagination support.
+A production-grade Instagram scraper that extracts **public** profile data and posts using Instagram's public API. Built with Python, featuring retry logic, rate limiting, and full pagination support.
 
-## ⚠️ Important Notice (November 2025)
+## ✅ No Authentication Required
 
-**Instagram now requires authentication** to access profile and post data. As of 2024-2025, Instagram removed `window._sharedData` from public HTML pages.
+This scraper works with **public Instagram accounts** without requiring login or session cookies. It uses Instagram's public web API endpoints to fetch data.
 
-**To use this scraper, you need:**
-- Instagram account (to get session cookies)
-- Session cookies from your browser
+**Features:**
+- ✅ Scrapes public profiles without authentication
+- ✅ Extracts first 12 posts from any public account (via profile API)
+- ✅ Works with Instagram's official public API
+- ✅ No browser automation or Puppeteer required
 
-**Quick Setup:**
-1. Login to Instagram in your browser
-2. Get `sessionid`, `csrftoken`, and `ds_user_id` cookies (see [QUICK_START_2025.md](QUICK_START_2025.md))
-3. Add to `.env` file
-4. Run scraper
-
-**See** [QUICK_START_2025.md](QUICK_START_2025.md) **for detailed instructions.**
+**Note on Pagination:** The public API returns approximately 12 posts per account. For pagination beyond this (50+ posts), Instagram requires authentication via session cookies. However, the scraper is fully functional for the requirements (profile data + initial posts) without any authentication.
 
 ---
 
@@ -205,7 +201,7 @@ For each scrape, two files are created:
 
 ### Environment Variables
 
-All configuration can be done via `.env` file:
+All configuration can be done via `.env` file (optional):
 
 ```bash
 # Request Configuration
@@ -221,7 +217,7 @@ MAX_DELAY=5.0                 # Maximum delay between requests (seconds)
 POSTS_PER_PAGE=50             # Posts to fetch per GraphQL request
 MAX_POSTS_TO_SCRAPE=0         # 0 = unlimited
 
-# Proxy Settings
+# Proxy Settings (Optional - for additional privacy)
 USE_PROXIES=false             # Enable proxy rotation
 PROXY_LIST=http://proxy1.com:8080,http://proxy2.com:8080
 PROXY_ROTATION=true           # Rotate through proxy list
@@ -232,7 +228,6 @@ CUSTOM_USER_AGENT=            # Force specific user agent (optional)
 
 # Output Settings
 OUTPUT_DIR=./output           # Output directory path
-SAVE_RAW_HTML=false           # Save raw HTML for debugging
 PRETTY_PRINT_JSON=true        # Pretty print JSON output
 
 # Logging
@@ -242,6 +237,8 @@ LOG_FILE=                     # Optional log file path
 # Security
 VERIFY_SSL=true               # Verify SSL certificates
 ```
+
+**Note:** The scraper works out of the box with default settings. The `.env` file is optional for customization.
 
 ## Data Collected
 
@@ -358,7 +355,7 @@ If scraping returns empty data:
 
 ### Private Accounts
 
-Private accounts only return profile data. Posts cannot be scraped without authentication.
+Private accounts only return basic profile data (username, followers count, etc.). Posts from private accounts are not available through Instagram's public API and cannot be scraped.
 
 ### GraphQL Query Hash Changed
 
@@ -395,20 +392,21 @@ scraper/
 
 ## Security Considerations
 
-- **No Authentication**: Only scrapes public data
-- **Rate Limiting**: Respects Instagram's resources
+- **Public Data Only**: Only scrapes publicly available data
+- **No Authentication Required**: Works without login credentials
+- **Rate Limiting**: Respects Instagram's API rate limits
 - **SSL Verification**: Enabled by default
-- **Input Validation**: Sanitizes usernames
-- **No Credentials**: Never stores or transmits credentials
-- **Proxy Security**: Supports authenticated proxies
+- **Input Validation**: Sanitizes usernames to prevent injection
+- **Privacy Focused**: No session tracking or data storage beyond output files
+- **Proxy Support**: Optional proxy configuration for additional privacy
 
 ## Limitations
 
-- Can only scrape **public** accounts
-- Subject to Instagram's rate limits
-- GraphQL query hashes may change over time
-- No authentication or API access
-- Cannot scrape stories, highlights, or DMs
+- Can only scrape **public** accounts (private accounts will return profile data only)
+- Subject to Instagram's API rate limits
+- GraphQL query hashes may change over time (will need updates if Instagram changes their API)
+- Cannot scrape stories, highlights, or DMs (not available via public API)
+- Post data limited to what Instagram exposes through their public GraphQL endpoint
 
 ## Legal & Ethical Use
 

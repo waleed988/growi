@@ -77,10 +77,18 @@ class InstagramScraper:
 
             # Step 2: Scrape posts with pagination
             logger.info("Step 2/2: Scraping posts with pagination...")
+            # Extract user data from profile (if available)
+            profile_user_data = profile.get('_user_data')
             posts = self.posts_scraper.scrape_posts(
                 username=username,
+                user_id=profile['id'],
+                profile_user_data=profile_user_data,
                 max_posts=max_posts
             )
+
+            # Remove internal user data from profile before saving
+            if '_user_data' in profile:
+                del profile['_user_data']
 
             logger.info(f"Successfully scraped {len(posts)} posts")
 

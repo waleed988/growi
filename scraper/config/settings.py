@@ -19,7 +19,11 @@ class ScraperConfig:
 
     # Instagram Base URLs
     BASE_URL = "https://www.instagram.com"
+    API_BASE_URL = "https://i.instagram.com/api/v1"
     GRAPHQL_URL = f"{BASE_URL}/graphql/query/"
+
+    # Instagram Web App ID (required for public API access)
+    INSTAGRAM_APP_ID = "936619743392459"
 
     # Request Configuration
     REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))  # seconds
@@ -62,22 +66,22 @@ class ScraperConfig:
 
     # Headers Configuration
     DEFAULT_HEADERS = {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
         "DNT": "1",
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Cache-Control": "max-age=0",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "X-IG-App-ID": INSTAGRAM_APP_ID,
+        "X-Requested-With": "XMLHttpRequest",
     }
 
     # GraphQL Configuration
     # These may need to be updated periodically as Instagram changes them
     QUERY_HASH_USER_INFO = "58b6785bea111c67129decbe6a448951"
-    QUERY_HASH_USER_POSTS = "69cba40317214236af40e7efa697781d"
+    QUERY_HASH_USER_POSTS = "e769aa130647d2354c40ea6a439bfc08"  # Updated query hash for posts
 
     @classmethod
     def get_proxy(cls, index: int = 0) -> Optional[dict]:

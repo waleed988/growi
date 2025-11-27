@@ -131,13 +131,12 @@ class ProfileScraper:
             profile_data = None
 
             # Try different paths
-            if 'entry_data' in data:
-                if 'ProfilePage' in data['entry_data']:
-                    profile_page = data['entry_data']['ProfilePage'][0]
-                    if 'graphql' in profile_page:
-                        profile_data = profile_page['graphql']['user']
-                    elif 'user' in profile_page:
-                        profile_data = profile_page['user']
+            if 'ProfilePage' in data['entry_data']:
+                profile_page = data['entry_data']['ProfilePage'][0]
+                if 'graphql' in profile_page:
+                    profile_data = profile_page['graphql']['user']
+                elif 'user' in profile_page:
+                    profile_data = profile_page['user']
 
             # Alternative structure
             elif 'graphql' in data:
@@ -184,9 +183,55 @@ class ProfileScraper:
             logger.error(f"Error parsing profile data: {e}", exc_info=True)
             return None
 
+    def _parse_api_profile_data(self, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Parse profile data from Instagram's public API response.
+
+        Args:
+            user_data: User data from API response
+
+        Returns:
+            Parsed profile data or None
+        """
+        try:
+            # Extract required fields with safe access
+            profile = {
+                'id': user_data.get('id'),
+                'username': user_data.get('username'),
+                'full_name': user_data.get('full_name', ''),
+                'biography': user_data.get('biography', ''),
+                'follower_count': user_data.get('edge_followed_by', {}).get('count', 0),
+                'following_count': user_data.get('edge_follow', {}).get('count', 0),
+                'posts_count': user_data.get('edge_owner_to_timeline_media', {}).get('count', 0),
+                'profile_pic_url': user_data.get('profile_pic_url', ''),
+                'profile_pic_url_hd': user_data.get('profile_pic_url_hd', ''),
+                'is_verified': user_data.get('is_verified', False),
+                'is_business_account': user_data.get('is_business_account', False),
+                'is_professional_account': user_data.get('is_professional_account', False),
+                'is_private': user_data.get('is_private', False),
+                'category': user_data.get('category_name') or user_data.get('category_enum'),
+                'external_url': user_data.get('external_url'),
+                'scraped_at': datetime.utcnow().isoformat() + 'Z',
+                'scraper_version': self.config.SCRAPER_VERSION,
+            }
+
+            # Validate required fields
+            if not profile['username']:
+                logger.error("Username not found in profile data")
+                return None
+
+            logger.info(f"Successfully parsed profile data for @{profile['username']}")
+            logger.debug(f"Profile has {profile['posts_count']} posts, {profile['follower_count']} followers")
+
+            return profile
+
+        except Exception as e:
+            logger.error(f"Error parsing API profile data: {e}", exc_info=True)
+            return None
+
     def scrape_profile(self, username: str) -> Optional[Dict[str, Any]]:
         """
-        Scrape profile data for a given username.
+        Scrape profile data for a given username using Instagram's public API.
 
         Args:
             username: Instagram username (without @)
@@ -209,11 +254,12 @@ class ProfileScraper:
         logger.info(f"Starting profile scrape for @{username}")
 
         try:
-            # Build profile URL
-            profile_url = f"{self.config.BASE_URL}/{username}/"
+            # Use Instagram's public web API
+            api_url = f"{self.config.API_BASE_URL}/users/web_profile_info/"
+            params = {"username": username}
 
-            # Fetch profile page
-            response = self.client.get(profile_url)
+            # Fetch profile data from API
+            response = self.client.get(api_url, params=params)
 
             if response.status_code == 404:
                 logger.error(f"Profile not found: @{username}")
@@ -223,48 +269,45 @@ class ProfileScraper:
                 logger.error(f"Failed to fetch profile: HTTP {response.status_code}")
                 return None
 
-            # Get HTML content (requests auto-decodes based on Content-Encoding header)
-            html = response.text
-
-            # Debug: Check if we got valid HTML
-            if not html or len(html) < 1000:
-                logger.error(f"Response too short or empty: {len(html)} bytes")
-                logger.debug(f"Response headers: {dict(response.headers)}")
-                logger.debug(f"First 200 chars: {html[:200]}")
+            # Parse JSON response
+            try:
+                data = response.json()
+                # Save response for debugging if configured
+                if self.config.SAVE_RAW_HTML:
+                    import os
+                    os.makedirs(self.config.OUTPUT_DIR, exist_ok=True)
+                    with open(f"{self.config.OUTPUT_DIR}/{username}_profile_api_response.json", 'w') as f:
+                        json.dump(data, f, indent=2)
+                    logger.debug(f"Saved API response to {self.config.OUTPUT_DIR}/{username}_profile_api_response.json")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.debug(f"Response content: {response.text[:500]}")
                 return None
 
-            # Check if HTML looks valid (should start with <!DOCTYPE or <html)
-            if not (html.strip().startswith('<!DOCTYPE') or html.strip().startswith('<html')):
-                logger.warning(f"Response doesn't look like HTML. First 100 chars: {html[:100]}")
-                logger.debug(f"Content-Type: {response.headers.get('content-type')}")
-                logger.debug(f"Content-Encoding: {response.headers.get('content-encoding')}")
+            # Extract user data from API response
+            user_data = data.get("data", {}).get("user")
 
-            # Save raw HTML if configured
-            if self.config.SAVE_RAW_HTML:
-                output_path = f"{self.config.OUTPUT_DIR}/{username}_profile.html"
-                try:
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        f.write(html)
-                    logger.debug(f"Saved raw HTML to {output_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to save raw HTML: {e}")
-
-            # Extract data
-            shared_data = self._extract_shared_data(html)
-            if not shared_data:
-                logger.warning("Trying alternative extraction method...")
-                shared_data = self._extract_graphql_data(html)
-
-            if not shared_data:
-                logger.error("Failed to extract any data from profile page")
+            if not user_data:
+                logger.error("No user data found in API response")
+                logger.debug(f"Response structure: {list(data.keys())}")
                 return None
 
-            # Parse profile data
-            profile_data = self._parse_profile_data(shared_data)
+            # Check if posts data is included (for potential extraction)
+            has_posts = 'edge_owner_to_timeline_media' in user_data
+            logger.debug(f"Profile API includes posts data: {has_posts}")
+            if has_posts:
+                posts_count_in_response = len(user_data.get('edge_owner_to_timeline_media', {}).get('edges', []))
+                logger.info(f"Profile API returned {posts_count_in_response} initial posts")
+
+            # Parse profile data from API response
+            profile_data = self._parse_api_profile_data(user_data)
 
             if not profile_data:
                 logger.error("Failed to parse profile data")
                 return None
+
+            # Store the full user data for posts extraction
+            profile_data['_user_data'] = user_data
 
             logger.info(f"Successfully scraped profile @{username}")
             return profile_data
