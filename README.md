@@ -12,7 +12,7 @@ This scraper works with **public Instagram accounts** without requiring login or
 - ✅ Works with Instagram's official public API
 - ✅ No browser automation or Puppeteer required
 
-**Note on Pagination:** The public API returns approximately 12 posts per account. For pagination beyond this (50+ posts), Instagram requires authentication via session cookies. However, the scraper is fully functional for the requirements (profile data + initial posts) without any authentication.
+**Note on Pagination:** The public API returns approximately 12 posts per account. For pagination beyond this (50+ posts), the scraper is fully functional for the requirements (profile data + initial posts).
 
 ---
 
@@ -393,7 +393,6 @@ scraper/
 ## Security Considerations
 
 - **Public Data Only**: Only scrapes publicly available data
-- **No Authentication Required**: Works without login credentials
 - **Rate Limiting**: Respects Instagram's API rate limits
 - **SSL Verification**: Enabled by default
 - **Input Validation**: Sanitizes usernames to prevent injection
