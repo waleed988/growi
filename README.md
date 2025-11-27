@@ -45,21 +45,6 @@ cd scraper
 pip install -r requirements.txt
 ```
 
-### 3. Configuration (Optional)
-
-Copy the example environment file and customize settings:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` to configure:
-- Request timeouts and retries
-- Rate limiting parameters
-- Proxy settings
-- Output preferences
-- Logging level
-
 ## Quick Start
 
 ### Basic Usage
@@ -199,9 +184,9 @@ For each scrape, two files are created:
 
 ## Configuration
 
-### Environment Variables
+### Environment Configurations
 
-All configuration can be done via `.env` file (optional):
+All configurations are listed below:
 
 ```bash
 # Request Configuration
@@ -237,8 +222,6 @@ LOG_FILE=                     # Optional log file path
 # Security
 VERIFY_SSL=true               # Verify SSL certificates
 ```
-
-**Note:** The scraper works out of the box with default settings. The `.env` file is optional for customization.
 
 ## Data Collected
 
@@ -325,7 +308,7 @@ VERIFY_SSL=true               # Verify SSL certificates
 
 If you encounter rate limiting:
 
-1. Increase delays in `.env`:
+1. Increase delays in `settings file`:
    ```
    MIN_DELAY=5.0
    MAX_DELAY=10.0
@@ -370,7 +353,6 @@ If Instagram changes their GraphQL query hashes:
 scraper/
 ├── main.py                 # Entry point and CLI
 ├── requirements.txt        # Python dependencies
-├── .env.example           # Configuration template
 │
 ├── config/
 │   ├── __init__.py
